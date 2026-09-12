@@ -10,6 +10,11 @@ const FILE_PATH = path.join(__dirname, 'tareas.json');
 // Middlewares
 app.use(cors());
 app.use(express.json());
+// Ruta de diagnóstico para verificar que el hosting funciona
+app.get('/', (req, res) => {
+    res.status(200).json({ mensaje: "¡El servidor en Render está vivo y respondiendo!" });
+});
+
 
 // Funciones auxiliares para leer y escribir en el archivo JSON (Persistencia)
 const leerTareas = () => {
