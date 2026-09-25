@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Pruebas API - Gestión de Tareas</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 20px auto; padding: 0 20px; background-color: #f4f6f9; color: #333; }
+        h1 { text-align: center; color: #2c3e50; }
+        .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .btn-group { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }
+        button { padding: 10px 15px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; transition: background 0.2s; }
+        .btn-get { background-color: #3498db; color: white; }
+        .btn-post { background-color: #2ecc71; color: white; }
+        .btn-put { background-color: #f1c40f; color: black; }
+        .btn-delete { background-color: #e74c3c; color: white; }
+        button:hover { opacity: 0.9; }
+        .info-box { display: flex; gap: 10px; margin-bottom: 15px; }
+        input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        pre { background: #2c3e50; color: #fff; padding: 15px; border-radius: 5px; overflow-x: auto; max-height: 300px; font-size: 14px; }
+        .status-badge { font-weight: bold; padding: 5px 10px; border-radius: 3px; display: inline-block; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>🚀 Panel de Control Automatizado de la API</h1>
+    
+    <div class="panel">
+        <h3>1. Selecciona la Operación CRUD a ejecutar:</h3>
+        <div class="btn-group">
+            <button class="btn-get" onclick="ejecutarGet()">GET /api/tasks (Listar Todo)</button>
+            <button class="btn-post" onclick="ejecutarPost()">POST /api/tasks (Crear Tarea)</button>
+        </div>
+        
+        <h3>2. Operaciones Individuales (Requieren ID de tarea):</h3>
+        <div class="info-box">
+            <input type="text" id="taskId" placeholder="Pega el ID de la tarea aquí para actualizar o eliminar">
+        </div>
+        <div class="btn-group">
+            <button class="btn-put" onclick="ejecutarPut()">PUT /api/tasks/:id (Marcar Completada)</button>
+            <button class="btn-delete" onclick="ejecutarDelete()">DELETE /api/tasks/:id (Eliminar)</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3>🔍 Consola de Resultados en Tiempo Real:</h3>
+        <div id="statusOutput" class="status-badge"></div>
+        <p><strong>URL Consultada:</strong> <span id="urlOutput" style="color: #7f8c8d;">-</span></p>
+        <p><strong>Respuesta del Servidor (JSON):</strong></p>
+        <pre id="jsonOutput">// Los datos de respuesta aparecerán aquí al presionar un botón...</pre>
+    </div>
+
+    <script>
+        // Detecta automáticamente si estás en localhost o en Render
+        const API_URL = window.location.origin + '/api/tasks';
+
+        function mostrarResultado(url, status, data) {
+            document.getElementById('urlOutput').innerText = url;
+            const badge = document.getElementById('statusOutput');
+            badge.innerText = `Status: ${status}`;
+            
+            if (status >= 200 && status < 300) {
+                badge.style.backgroundColor = '#2ecc71';
+                badge.style.color = 'white';
+            } else {
+                badge.style.backgroundColor = '#e74c3c';
+                badge.style.color = 'white';
+            }
+            
+            document.getElementById('jsonOutput').innerText = JSON.stringify(data, null, 2);
+        }
+
+        async function ejecutarGet() {
+            try {
+                const res = await fetch(API_URL);
+                const data = await res.json();
+                mostrarResultado(API_URL, res.status, data);
+            } catch (err) {
+                mostrarResultado(API_URL, "Error", { error: err.message });
+            }
+        }
+
+        async function ejecutarPost() {
+            try {
+                const nuevaTarea = {
+                    titulo: "Tarea desde Panel Web",
+                    descripcion: "Creada dinámicamente haciendo clic en el botón de la interfaz gráfica"
+                };
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(nuevaTarea)
+                });
+                const data = await res.json();
+                mostrarResultado(API_URL, res.status, data);
+                
+                // Autocompleta el campo ID con la tarea recién creada para facilitarte la prueba
+                if(data.id) document.getElementById('taskId').value = data.id;
+            } catch (err) {
+                mostrarResultado(API_URL, "Error", { error: err.message });
+            }
+        }
+
+        async function ejecutarPut() {
+            const id = document.getElementById('taskId').value;
+            if (!id) return alert('Por favor, ingresa o genera un ID de tarea primero.');
+            const url = `${API_URL}/${id}`;
+            try {
+                const res = await fetch(url, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ completada: true })
+                });
+                const data = await res.json();
+                mostrarResultado(url, res.status, data);
+            } catch (err) {
+                mostrarResultado(url, "Error", { error: err.message });
+            }
+        }
+
+        async function ejecutarDelete() {
+            const id = document.getElementById('taskId').value;
+            if (!id) return alert('Por favor, ingresa o genera un ID de tarea primero.');
+            const url = `${API_URL}/${id}`;
+            try {
+                const res = await fetch(url, { method: 'DELETE' });
+                const data = await res.json();
+                mostrarResultado(url, res.status, data);
+            } catch (err) {
+                mostrarResultado(url, "Error", { error: err.message });
+            }
+        }
+    </script>
+</body>
+</html>
