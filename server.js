@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ⚠️ REEMPLAZA ESTA CADENA POR TU URL REAL DE MONGODB ATLAS
-const MONGO_URI = 'TU_CADENA_DE_CONEXION_DE_MONGODB_ATLAS';
+const MONGO_URI = 'mongodb+srv://orlandoviruland_db_user:kgGGlkGLBl4PDi86@cluster0.painmm7.mongodb.net/?appName=Cluster0';
 
 // Conexión a la Base de Datos en la Nube
 mongoose.connect(MONGO_URI)
