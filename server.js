@@ -1,114 +1,121 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
+const mongoose = require('mongoose');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const FILE_PATH = path.join(__dirname, 'tareas.json');
+
+// ⚠️ REEMPLAZA ESTA CADENA POR TU URL REAL DE MONGODB ATLAS
+const MONGO_URI = 'TU_CADENA_DE_CONEXION_DE_MONGODB_ATLAS';
+
+// Conexión a la Base de Datos en la Nube
+mongoose.connect(MONGO_URI)
+    .then(() => console.log('🟢 Conectado exitosamente a MongoDB Atlas'))
+    .catch(err => console.error('🔴 Error al conectar a MongoDB:', err));
+
+// Definición del Modelo de Datos (Esquema de la Tarea)
+const TaskSchema = new mongoose.Schema({
+    titulo: { type: String, required: true },
+    descripcion: { type: String, required: true },
+    completada: { type: Boolean, default: false },
+    fechaCreacion: { type: String, default: () => new Date().toISOString() }
+}, {
+    // Convierte automáticamente el _id de Mongo a un campo id limpio para el Frontend
+    toJSON: {
+        transform: (doc, ret) => {
+            ret.id = ret._id.toString();
+            delete ret._id;
+            delete ret.__v;
+        }
+    }
+});
+
+const Task = mongoose.model('Task', TaskSchema);
 
 // Middlewares
 app.use(cors());
 app.use(express.json());
-// Ruta de diagnóstico para verificar que el hosting funciona
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ==========================================
+// RUTAS DE LA API (CRUD REFACTORIZADO A BASE DE DATOS)
+// ==========================================
 
-// Funciones auxiliares para leer y escribir en el archivo JSON (Persistencia)
-const leerTareas = () => {
+// 1. GET: Obtener todas las tareas de la base de datos
+app.get('/api/tasks', async (req, res) => {
     try {
-        const data = fs.readFileSync(FILE_PATH, 'utf-8');
-        return JSON.parse(data);
+        const tareas = await Task.find();
+        res.status(200).json(tareas);
     } catch (error) {
-        return [];
+        res.status(500).json({ error: "Error al obtener las tareas" });
     }
-};
-
-const guardarTareas = (tareas) => {
-    fs.writeFileSync(FILE_PATH, JSON.stringify(tareas, null, 2));
-};
-
-// ==========================================
-// RUTAS DE LA API (CRUD COMPLETAS)
-// ==========================================
-
-// 1. GET: Obtener todas las tareas
-app.get('/api/tasks', (req, res) => {
-    const tareas = leerTareas();
-    res.status(200).json(tareas);
 });
 
 // 2. GET: Obtener una tarea por ID
-app.get('/api/tasks/:id', (req, res) => {
-    const tareas = leerTareas();
-    const tarea = tareas.find(t => t.id === req.params.id);
-    
-    if (!tarea) {
-        return res.status(404).json({ error: "Tarea no encontrada" });
+app.get('/api/tasks/:id', async (req, res) => {
+    try {
+        const tarea = await Task.findById(req.params.id);
+        if (!tarea) return res.status(404).json({ error: "Tarea no encontrada" });
+        res.status(200).json(tarea);
+    } catch (error) {
+        res.status(404).json({ error: "ID inválido o tarea no encontrada" });
     }
-    
-    res.status(200).json(tarea);
 });
 
-// 3. POST: Crear una nueva tarea (Con Validación)
-app.post('/api/tasks', (req, res) => {
+// 3. POST: Crear una nueva tarea con validación
+app.post('/api/tasks', async (req, res) => {
     const { titulo, descripcion } = req.body;
     
-    // Validación de datos de entrada obligatorios
     if (!titulo || !descripcion) {
         return res.status(400).json({ error: "El título y la descripción son obligatorios" });
     }
     
-    const tareas = leerTareas();
-    const nuevaTarea = {
-        id: Date.now().toString(), // Genera un ID único basado en tiempo
-        titulo,
-        descripcion,
-        completada: false,
-        fechaCreacion: new Date().toISOString()
-    };
-    
-    tareas.push(nuevaTarea);
-    guardarTareas(tareas);
-    
-    res.status(201).json(nuevaTarea); // 201 Created
+    try {
+        const nuevaTarea = new Task({ titulo, descripcion });
+        await nuevaTarea.save();
+        res.status(201).json(nuevaTarea);
+    } catch (error) {
+        res.status(500).json({ error: "Error al guardar la tarea" });
+    }
 });
 
-// 4. PUT: Actualizar una tarea por ID (Modificación total/parcial)
-app.put('/api/tasks/:id', (req, res) => {
+// 4. PUT: Actualizar una tarea por ID
+app.put('/api/tasks/:id', async (req, res) => {
     const { titulo, descripcion, completada } = req.body;
-    const tareas = leerTareas();
-    const index = tareas.findIndex(t => t.id === req.params.id);
     
-    if (index === -1) {
-        return res.status(404).json({ error: "Tarea no encontrada" });
-    }
-    
-    // Validación: Al menos un campo debe enviarse para actualizar
     if (titulo === undefined && descripcion === undefined && completada === undefined) {
-        return res.status(400).json({ error: "Debes enviar al menos un campo para actualizar (titulo, descripcion o completada)" });
+        return res.status(400).json({ error: "Debes enviar al menos un campo para actualizar" });
     }
     
-    // Actualización parcial o total
-    if (titulo !== undefined) tareas[index].titulo = titulo;
-    if (descripcion !== undefined) tareas[index].descripcion = descripcion;
-    if (completada !== undefined) tareas[index].completada = completada;
-    
-    guardarTareas(tareas);
-    res.status(200).json(tareas[index]);
+    try {
+        const camposActualizar = {};
+        if (titulo !== undefined) camposActualizar.titulo = titulo;
+        if (descripcion !== undefined) camposActualizar.descripcion = descripcion;
+        if (completada !== undefined) camposActualizar.completada = completada;
+
+        const tareaActualizada = await Task.findByIdAndUpdate(
+            req.params.id, 
+            camposActualizar, 
+            { new: true } // Retorna el documento ya modificado
+        );
+
+        if (!tareaActualizada) return res.status(404).json({ error: "Tarea no encontrada" });
+        res.status(200).json(tareaActualizada);
+    } catch (error) {
+        res.status(500).json({ error: "Error al actualizar la tarea" });
+    }
 });
 
 // 5. DELETE: Eliminar una tarea por ID
-app.delete('/api/tasks/:id', (req, res) => {
-    const tareas = leerTareas();
-    const tareasFiltradas = tareas.filter(t => t.id !== req.params.id);
-    
-    if (tareas.length === tareasFiltradas.length) {
-        return res.status(404).json({ error: "Tarea no encontrada" });
+app.delete('/api/tasks/:id', async (req, res) => {
+    try {
+        const tareaEliminada = await Task.findByIdAndDelete(req.params.id);
+        if (!tareaEliminada) return res.status(404).json({ error: "Tarea no encontrada" });
+        res.status(200).json({ mensaje: "Tarea eliminada correctamente" });
+    } catch (error) {
+        res.status(500).json({ error: "Error al eliminar la tarea" });
     }
-    
-    guardarTareas(tareasFiltradas);
-    res.status(200).json({ mensaje: "Tarea eliminada correctamente" }); // O 204 sin contenido
 });
 
 // Iniciar servidor
